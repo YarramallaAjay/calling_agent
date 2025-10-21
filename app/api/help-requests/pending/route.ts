@@ -1,0 +1,21 @@
+import { NextResponse } from 'next/server';
+import { getPendingHelpRequests } from '@/lib/firebase/helpRequests';
+
+export async function GET() {
+  try {
+    const requests = await getPendingHelpRequests();
+    return NextResponse.json({
+      success: true,
+      data: requests,
+    });
+  } catch (error) {
+    console.error('Error fetching pending help requests:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to fetch pending help requests',
+      },
+      { status: 500 }
+    );
+  }
+}

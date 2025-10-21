@@ -1,80 +1,196 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.env
-.env.*
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+# =========================================================
+# 🌍 GENERAL
+# =========================================================
 .DS_Store
-*.pem
-
-# debug
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.bak
+*~
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
-
-# env files
-.env*
-!.env.local.example
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# firebase
-.firebase/
-
-# livekit
-.livekit/
-
-# logs
-logs
-*.log
-
-# runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# coverage
-*.lcov
-.nyc_output
+# =========================================================
+# 🔒 ENVIRONMENT VARIABLES
+# =========================================================
+.env
+.env.*
+!.env.example
+!.env.local.example
 
-# build
-dist
+# =========================================================
+# 🐍 PYTHON / FASTAPI BACKEND
+# =========================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# cache
+# Virtual environments
+venv/
+.venv/
+env/
+env.bak/
+ENV/
+
+# Packaging / build artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+lib/
+lib64/
+share/python-wheels/
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+wheels/
+MANIFEST
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
 .cache
-.parcel-cache
-.nuxt
-.docusaurus
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
 
-# yarn
+# Database / app data
+instance/
+*.db
+*.sqlite3
+*.sqlite
+db.sqlite3
+*.db-journal
+
+# Type checker / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pylint.d/
+
+# Profiling
+.prof
+*.prof
+*.lprof
+
+# Logs
+uvicorn.log
+
+# IDE / editor
+.vscode/
+.idea/
+.spyderproject
+.spyproject
+.ropeproject
+.pydevproject
+*.sublime-workspace
+*.sublime-project
+
+# Jupyter notebooks
+.ipynb_checkpoints
+
+# OS files
+Desktop.ini
+
+# Docker
+Dockerfile~
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Poetry / Pipenv
+poetry.lock
+Pipfile.lock
+
+# PyInstaller
+*.spec
+
+# Python bytecode cache
+__pycache__/
+
+# Pytest cache
+.pytest_cache/
+
+# FastAPI compiled static files (if any)
+staticfiles/
+
+# =========================================================
+# ⚡ NEXT.JS FRONTEND
+# =========================================================
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
 
-# bun
+# Next.js build output
+.next/
+out/
+
+# Production build
+build/
+
+# Testing / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Misc
+*.pem
+.next-env.d.ts
+*.tsbuildinfo
+
+# Firebase / Vercel / Livekit
+serviceAccountKey.json
+.vercel/
+.firebase/
+.livekit/
+
+# Cache
+.cache/
+.parcel-cache/
+.nuxt/
+.docusaurus/
+
+# =========================================================
+# 🧰 MONOREPO / TOOLING
+# =========================================================
+# Yarn berry
+.pnp.*
+.yarnrc.yml
+
+# Lock files (optional if using multiple package managers)
 bun.lockb
+
+# Temporary files
+tmp/
+temp/
+
+# =========================================================
+# ✅ KEEP THESE EXAMPLES (DO NOT IGNORE)
+# =========================================================
+!.env.example
+!.env.local.example

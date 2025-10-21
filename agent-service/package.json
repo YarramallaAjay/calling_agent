@@ -1,0 +1,23 @@
+{
+  "name": "livekit-voice-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch agent.ts",
+    "start": "tsx agent.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@livekit/agents": "^1.1.0",
+    "@livekit/rtc-node": "^0.11.0",
+    "livekit-server-sdk": "^2.9.0",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
+  }
+}
