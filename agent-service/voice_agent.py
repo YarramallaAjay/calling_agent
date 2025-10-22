@@ -9,15 +9,13 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 
-from livekit import rtc
 from livekit.agents import (
-    AutoSubscribe,
     JobContext,
     WorkerOptions,
     cli,
     llm,
 )
-from livekit.agents.voice import Agent as VoiceAgent
+from livekit.agents.voice import Agent, AgentSession
 from livekit.plugins import deepgram, google, silero
 
 load_dotenv()
@@ -80,7 +78,7 @@ class SupervisorChat:
         Ask supervisor for help and wait for response.
         This creates a help request and polls for supervisor answer.
         """
-        logger.info(f"🚨 Asking supervisor: {question}")
+        logger.info(f"Asking supervisor: {question}")
 
         try:
             # Create help request
@@ -132,7 +130,7 @@ class SupervisorChat:
                 logger.info(f"Waiting for supervisor... ({elapsed}s)")
 
             # Timeout
-            logger.warning("⏱Supervisor response timeout")
+            logger.warning("Supervisor response timeout")
             return {"error": "Supervisor did not respond in time"}
 
         except Exception as e:
@@ -140,11 +138,10 @@ class SupervisorChat:
             return {"error": str(e)}
 
 
-class VoiceAgentFunctions(llm.ToolContext):
+class VoiceAgentFunctions:
     """Functions available to the voice agent during calls"""
 
     def __init__(self, supervisor_chat: SupervisorChat, session_id: str):
-        super().__init__()
         self.supervisor_chat = supervisor_chat
         self.session_id = session_id
         self.conversation_context = []
@@ -212,24 +209,14 @@ class VoiceAgentFunctions(llm.ToolContext):
             )
 
 
+
+
 async def entrypoint(ctx: JobContext):
     """
     Main entry point for voice agent.
     Handles incoming phone calls with real-time supervisor intervention.
     """
     logger.info(f"Incoming call to room: {ctx.room.name}")
-
-    # Connect to room (audio only)
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-
-    # Wait for caller
-    participant = await ctx.wait_for_participant()
-    logger.info(f"Caller connected: {participant.identity}")
-    logger.info(f"Metadata: {participant.metadata}")
-
-    # Extract caller info
-    caller_phone = participant.metadata or participant.identity
-    session_id = ctx.room.name
 
     # Initialize supervisor chat interface
     api_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
@@ -238,96 +225,83 @@ async def entrypoint(ctx: JobContext):
     # Initialize function context
     fnc_ctx = VoiceAgentFunctions(
         supervisor_chat=supervisor_chat,
-        session_id=session_id
+        session_id=ctx.room.name
     )
-
-    # Get caller name from first interaction
-    fnc_ctx.caller_phone = caller_phone
 
     # Initialize voice pipeline with Gemini
     logger.info("Initializing voice pipeline...")
 
-    # Use Deepgram for STT (best for phone calls)
-    stt = deepgram.STT(
-        model="nova-2-phonecall",  # Optimized for phone calls
-        language="en-US"
+    # Create agent with instructions and tools
+    agent = Agent(
+        instructions=SYSTEM_PROMPT,
+        tools=llm.find_function_tools(fnc_ctx),
     )
 
-    # Use Google Gemini for LLM
-    llm_instance = google.LLM(
-        model="gemini-1.5-flash",
-        api_key=os.getenv("GEMINI_API_KEY"),
-        temperature=0.7,  # Slightly creative but focused
-    )
-
-    # Use Google TTS (clear, natural voice)
-    tts = google.TTS(
-        voice="en-US-Neural2-F",  # Professional female voice
-    )
-
-    # Create voice pipeline agent
-    agent = VoiceAgent(
-        vad=silero.VAD.load(),  # Voice Activity Detection
-        stt=stt,
-        llm=llm_instance,
-        tts=tts,
-        fnc_ctx=fnc_ctx,
-        chat_ctx=llm.ChatContext().append(
-            role="system",
-            text=SYSTEM_PROMPT,
+    # Create agent session with models
+    session = AgentSession(
+        stt=deepgram.STT(model="nova-2-phonecall", language="en-US"),
+        llm=google.LLM(
+            model="gemini-2.0-flash-exp",
+            api_key=os.getenv("GEMINI_API_KEY"),
+            temperature=0.7,
         ),
+        tts=deepgram.TTS(model="aura-asteria-en"),
+        vad=silero.VAD.load(),
     )
 
-    # Track conversation
-    @agent.on("user_speech_committed")
-    def on_user_speech(msg: llm.ChatMessage):
-        """User spoke"""
-        fnc_ctx.add_to_context("user", msg.content)
-        logger.info(f" Caller: {msg.content}")
+    # Track conversation events
+    @session.on("user_input_transcribed")
+    def on_user_speech(event):
+        transcript = event.transcript if hasattr(event, 'transcript') else str(event)
+        fnc_ctx.add_to_context("user", transcript)
+        logger.info(f"Caller: {transcript}")
 
-        # Try to extract caller name from first message
+        # Extract caller name from first message
         if fnc_ctx.caller_name == "Unknown":
-            # Simple name extraction (improve with NER)
-            content_lower = msg.content.lower()
+            content_lower = transcript.lower()
             if "my name is" in content_lower or "i'm" in content_lower or "i am" in content_lower:
-                # Basic extraction - improve this
-                words = msg.content.split()
+                words = transcript.split()
                 for i, word in enumerate(words):
                     if word.lower() in ["is", "i'm", "am"] and i + 1 < len(words):
                         potential_name = words[i + 1].strip(".,!?")
-                        if potential_name[0].isupper():
+                        if potential_name and potential_name[0].isupper():
                             fnc_ctx.caller_name = potential_name
-                            logger.info(f"📝 Caller name: {potential_name}")
+                            logger.info(f"Caller name: {potential_name}")
                             break
 
-    @agent.on("agent_speech_committed")
-    def on_agent_speech(msg: llm.ChatMessage):
-        """Agent spoke"""
-        fnc_ctx.add_to_context("assistant", msg.content)
-        logger.info(f"Agent: {msg.content}")
+    @session.on("speech_created")
+    def on_agent_speech(speech):
+        if hasattr(speech, 'text') and speech.text:
+            fnc_ctx.add_to_context("assistant", speech.text)
+            logger.info(f"Agent: {speech.text}")
 
-    @agent.on("function_calls_finished")
-    def on_function_calls_finished(called_functions: list):
-        """Function call completed (e.g., escalation)"""
-        for func in called_functions:
-            logger.info(f"⚙️ Function executed: {func.function_info.name}")
+    @session.on("function_tools_executed")
+    def on_function_executed(event):
+        logger.info("Function tool executed")
 
-    # Start the agent
-    agent.start(ctx.room, participant)
+    # Greet user when they connect
+    greeted = False
 
-    # Greet the caller
-    greeting = (
-        "Hello! Thank you for calling Luxe Beauty Salon. "
-        "This is Bella. How may I help you today?"
-    )
-    await agent.say(greeting, allow_interruptions=True)
-    logger.info(f"{greeting}")
+    @ctx.room.on("participant_connected")
+    def on_participant_connected(participant):
+        nonlocal greeted
+        # Only greet human participants (not the agent itself)
+        if not greeted and participant.kind == "standard":
+            greeted = True
+            logger.info(f"Participant connected: {participant.identity}, sending greeting")
+            # Schedule greeting to run asynchronously
+            asyncio.create_task(session.generate_reply(
+                instructions="Greet the caller warmly by saying: 'Hello! Thank you for calling Luxe Beauty Salon. I'm Bella, your AI receptionist. How may I help you today?'"
+            ))
 
-    logger.info("Voice agent running - caller can now speak")
-    logger.info("Monitoring for confidence-based escalations...")
+    # Start the agent session
+    logger.info("Starting voice agent session")
+    logger.info("Monitoring for escalations")
 
-    # Keep running
-    await asyncio.sleep(float('inf'))
+    # Start session (this blocks until session ends)
+    await session.start(agent=agent, room=ctx.room)
+
+    logger.info("Voice agent session ended")
 
 
 if __name__ == "__main__":

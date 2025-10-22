@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
 import { HelpRequest } from '@/lib/types';
 import { RequestCard } from '@/components/dashboard/RequestCard';
 
@@ -11,31 +9,31 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Real-time listener for pending requests
-    const q = query(
-      collection(db, 'helpRequests'),
-      where('status', '==', 'pending'),
-      orderBy('createdAt', 'asc')
-    );
+    // Fetch pending requests via API
+    const fetchRequests = async () => {
+      try {
+        const response = await fetch('/api/help-requests/pending');
+        const data = await response.json();
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const pendingRequests = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as HelpRequest[];
-
-        setRequests(pendingRequests);
-        setLoading(false);
-      },
-      (error) => {
+        if (data.success) {
+          setRequests(data.data);
+        } else {
+          console.error('Failed to fetch requests:', data.error);
+        }
+      } catch (error) {
         console.error('Error fetching pending requests:', error);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    // Initial fetch
+    fetchRequests();
+
+    // Poll every 2 seconds for updates
+    const interval = setInterval(fetchRequests, 2000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleResolve = async (requestId: string, supervisorResponse: string) => {

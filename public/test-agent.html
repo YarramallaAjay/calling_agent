@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Agent Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .status.disconnected {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+        .status.connecting {
+            background: #fef7e0;
+            color: #c95;
+            border: 1px solid #fed;
+        }
+        .status.connected {
+            background: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .log-entry.info { color: #0070f3; }
+        .log-entry.success { color: #00a000; }
+        .log-entry.error { color: #d00; }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+        }
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .info-box li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Voice Agent Test</h1>
+        <p class="subtitle">Direct connection to your LiveKit voice agent</p>
+
+        <div class="info-box">
+            <h3>📋 Instructions</h3>
+            <ol>
+                <li>Generate a token by running: <code>cd agent-service && python generate_token.py</code></li>
+                <li>Paste the token below</li>
+                <li>Click "Connect to Agent"</li>
+                <li>Allow microphone access</li>
+                <li>Start speaking! The agent will respond.</li>
+            </ol>
+        </div>
+
+        <div id="status" class="status disconnected">
+            Status: Disconnected
+        </div>
+
+        <div>
+            <label for="token"><strong>Room Token:</strong></label>
+            <input type="text" id="token" placeholder="Paste your LiveKit token here" />
+        </div>
+
+        <button id="connectBtn" onclick="connect()">Connect to Agent</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        <button onclick="generateTokenInstructions()">Need a Token?</button>
+
+        <div class="log" id="log"></div>
+    </div>
+
+    <!-- Load LiveKit SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.8/dist/livekit-client.umd.min.js"></script>
+
+    <script>
+        let room = null;
+        let audioElements = [];
+
+        // Wait for LiveKit to load
+        function waitForLiveKit(callback) {
+            if (typeof LivekitClient !== 'undefined') {
+                callback();
+            } else {
+                addLog('Loading LiveKit SDK...', 'info');
+                setTimeout(() => waitForLiveKit(callback), 100);
+            }
+        }
+
+        async function connect() {
+            waitForLiveKit(async () => {
+                const token = document.getElementById('token').value.trim();
+
+                if (!token) {
+                    addLog('❌ Please enter a token', 'error');
+                    return;
+                }
+
+                try {
+                    updateStatus('connecting', 'Connecting...');
+                    addLog('🔌 Connecting to LiveKit room...', 'info');
+
+                    // Create room
+                    room = new LivekitClient.Room({
+                        adaptiveStream: true,
+                        dynacast: true,
+                    });
+
+                    // Setup event listeners
+                    room.on(LivekitClient.RoomEvent.Connected, () => {
+                        addLog('✅ Connected to room!', 'success');
+                        updateStatus('connected', 'Connected - Waiting for agent...');
+                    });
+
+                    room.on(LivekitClient.RoomEvent.Disconnected, () => {
+                        addLog('📴 Disconnected from room', 'info');
+                        updateStatus('disconnected', 'Disconnected');
+                        document.getElementById('connectBtn').disabled = false;
+                        document.getElementById('disconnectBtn').disabled = true;
+                    });
+
+                    room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+                        addLog(`👤 Participant joined: ${participant.identity}`, 'success');
+                        updateStatus('connected', '🤖 Agent Connected - Speak now!');
+                    });
+
+                    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                        addLog(`🎵 Audio track received from ${participant.identity}`, 'success');
+
+                        if (track.kind === LivekitClient.Track.Kind.Audio) {
+                            // Create audio element to play agent voice
+                            const element = track.attach();
+                            element.autoplay = true;
+                            element.volume = 1.0;
+                            element.style.display = 'none';
+                            document.body.appendChild(element);
+                            audioElements.push(element);
+
+                            addLog('🔊 Audio playback started - You should hear the agent speak!', 'success');
+                            addLog('💡 Volume is at maximum. Check your system volume if you can\'t hear.', 'info');
+                        }
+                    });
+
+                    room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+                        track.detach().forEach(el => {
+                            el.remove();
+                            audioElements = audioElements.filter(e => e !== el);
+                        });
+                        addLog('🔇 Audio track removed', 'info');
+                    });
+
+                    room.on(LivekitClient.RoomEvent.AudioPlaybackStatusChanged, () => {
+                        if (room.canPlaybackAudio) {
+                            addLog('🔊 Audio playback is ready', 'success');
+                        } else {
+                            addLog('⚠️ Audio playback blocked. Click page to enable.', 'info');
+                        }
+                    });
+
+                    // Connect to room
+                    const wsUrl = 'wss://calling-agent-ih8g5t00.livekit.cloud';
+                    await room.connect(wsUrl, token);
+                    addLog('✅ Room connection established', 'success');
+
+                    // Enable microphone
+                    await room.localParticipant.setMicrophoneEnabled(true);
+                    addLog('🎤 Microphone enabled - Start speaking!', 'success');
+                    addLog('💬 Try asking: "What are your hours?"', 'info');
+                    addLog('💬 Or ask: "Do you have parking?" to trigger escalation', 'info');
+
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+
+                    // Ensure audio can play (in case browser blocks autoplay)
+                    try {
+                        await room.startAudio();
+                        addLog('🔊 Audio started successfully', 'success');
+                    } catch (e) {
+                        addLog('⚠️ Click anywhere on the page to enable audio', 'info');
+                        document.addEventListener('click', async () => {
+                            try {
+                                await room.startAudio();
+                                addLog('🔊 Audio enabled!', 'success');
+                            } catch (err) {
+                                // Ignore
+                            }
+                        }, { once: true });
+                    }
+
+                } catch (error) {
+                    addLog(`❌ Connection error: ${error.message}`, 'error');
+                    updateStatus('disconnected', 'Connection failed');
+                    console.error('Connection error:', error);
+                    document.getElementById('connectBtn').disabled = false;
+                }
+            });
+        }
+
+        function disconnect() {
+            if (room) {
+                room.disconnect();
+                room = null;
+                addLog('👋 Disconnected by user', 'info');
+            }
+            audioElements.forEach(el => el.remove());
+            audioElements = [];
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+        }
+
+        function updateStatus(type, text) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = `Status: ${text}`;
+        }
+
+        function addLog(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function generateTokenInstructions() {
+            addLog('🔑 To generate a token:', 'info');
+            addLog('1. Open terminal', 'info');
+            addLog('2. Run: cd agent-service', 'info');
+            addLog('3. Run: source venv/bin/activate', 'info');
+            addLog('4. Run: python generate_token.py', 'info');
+            addLog('5. Copy the token and paste it above', 'info');
+        }
+
+        // Initial setup
+        window.onload = function() {
+            addLog('🎯 Voice Agent Test Page Loaded', 'success');
+            addLog('📝 Make sure the voice agent is running!', 'info');
+            addLog('💡 Check terminal shows: "registered worker"', 'info');
+            addLog('✨ Ready to connect. Paste your token above.', 'info');
+        };
+    </script>
+</body>
+</html>
