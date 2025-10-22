@@ -41,6 +41,35 @@ bun run build
 
 Should see: `✅ Firebase Admin initialized with service account file`
 
+### Step 1.5: Deploy Firebase Indexes
+
+The helpRequests query requires a composite index for performance.
+
+**Option 1: Quick Fix (Use the Auto-Generated Link)**
+1. When you see the index error, click the URL in the error message
+2. It will take you directly to Firebase Console to create the index
+3. Click "Create Index" and wait 1-2 minutes for it to build
+
+**Option 2: Deploy from Configuration File**
+```bash
+# Make sure you have Firebase CLI installed
+npm install -g firebase-tools
+
+# Login to Firebase
+firebase login
+
+# Initialize Firestore (if not already done)
+firebase init firestore
+
+# Deploy the indexes
+firebase deploy --only firestore:indexes
+```
+
+The `firestore.indexes.json` file has been created with the required index configuration for the `helpRequests` collection (status + createdAt fields).
+
+**Verify:**
+After deployment, the dashboard should load pending help requests without errors.
+
 ### Step 2: Get API Keys
 
 You need 3 API keys for the voice agent:
