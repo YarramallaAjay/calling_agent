@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchKnowledgeBase } from '@/lib/firebase/knowledgeBase';
+import { serializeKnowledgeBaseEntry } from '@/lib/firebase/serialize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: result,
+      data: result ? serializeKnowledgeBaseEntry(result) : null,
       found: result !== null,
     });
   } catch (error) {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: result,
+      data: result ? serializeKnowledgeBaseEntry(result) : null,
       found: result !== null,
     });
   } catch (error) {

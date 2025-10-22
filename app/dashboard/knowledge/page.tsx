@@ -186,9 +186,14 @@ export default function KnowledgePage() {
                 </div>
                 <span>
                   {entry.createdAt
-                    ? formatDistanceToNow(entry.createdAt.toDate(), {
-                        addSuffix: true,
-                      })
+                    ? formatDistanceToNow(
+                        typeof entry.createdAt === 'string'
+                          ? new Date(entry.createdAt)
+                          : new Date(entry.createdAt.toDate()),
+                        {
+                          addSuffix: true,
+                        }
+                      )
                     : 'Unknown time'}
                 </span>
               </div>

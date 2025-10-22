@@ -11,7 +11,7 @@ from livekit import api
 load_dotenv()
 
 async def dispatch_agent_to_room():
-    """Dispatch the agent to test-room"""
+    """Dispatch the agent to first_room"""
 
     livekit_api = api.LiveKitAPI(
         url=os.getenv("LIVEKIT_URL"),
@@ -19,7 +19,7 @@ async def dispatch_agent_to_room():
         api_secret=os.getenv("LIVEKIT_API_SECRET"),
     )
 
-    room_name = "test-room"
+    room_name = "first_room"
 
     try:
         # Create or update room with agent dispatch

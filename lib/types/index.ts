@@ -9,8 +9,8 @@ export interface HelpRequest {
   callerPhone: string;
   callerName?: string;
   status: HelpRequestStatus;
-  createdAt: Timestamp;
-  resolvedAt?: Timestamp;
+  createdAt: Timestamp | string; // Timestamp in DB, string when serialized for API
+  resolvedAt?: Timestamp | string;
   supervisorResponse?: string;
   timeout?: boolean;
   sessionId?: string;
@@ -35,7 +35,7 @@ export interface KnowledgeBaseEntry {
   id: string;
   question: string;
   answer: string;
-  createdAt: Timestamp;
+  createdAt: Timestamp | string; // Timestamp in DB, string when serialized for API
   learnedFromRequestId?: string;
   tags: string[];
   variations?: string[]; // Question variations for better matching
@@ -56,8 +56,8 @@ export interface CallSession {
   id: string;
   callerPhone: string;
   callerName?: string;
-  startTime: Timestamp;
-  endTime?: Timestamp;
+  startTime: Timestamp | string; // Timestamp in DB, string when serialized for API
+  endTime?: Timestamp | string;
   status: CallSessionStatus;
   helpRequestIds: string[];
   transcript?: string;

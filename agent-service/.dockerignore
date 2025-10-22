@@ -1,0 +1,42 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+venv
+env
+.venv
+
+# Environment files (secrets will be set via fly secrets)
+.env
+.env.*
+
+# Node.js (not needed for Python agent)
+node_modules
+package.json
+package-lock.json
+bun.lock
+tsconfig.json
+agent.ts
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+README.md
+
+# Scripts
+*.sh
+setup.sh
+install_step_by_step.sh
+
+# Test files
+test_*.py

@@ -4,13 +4,15 @@ import {
   getAllKnowledgeBaseEntries,
 } from '@/lib/firebase/knowledgeBase';
 import { CreateKnowledgeBaseEntryInput } from '@/lib/types';
+import { serializeKnowledgeBaseEntry } from '@/lib/firebase/serialize';
 
 export async function GET() {
   try {
     const entries = await getAllKnowledgeBaseEntries();
+    const serializedEntries = entries.map(serializeKnowledgeBaseEntry);
     return NextResponse.json({
       success: true,
-      data: entries,
+      data: serializedEntries,
     });
   } catch (error) {
     console.error('Error fetching knowledge base entries:', error);
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        data: entry,
+        data: serializeKnowledgeBaseEntry(entry),
       },
       { status: 201 }
     );

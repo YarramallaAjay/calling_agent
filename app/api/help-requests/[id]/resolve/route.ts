@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveHelpRequest } from '@/lib/firebase/helpRequests';
 import { createKnowledgeBaseEntry } from '@/lib/firebase/knowledgeBase';
+import { serializeHelpRequest } from '@/lib/firebase/serialize';
 
 export async function POST(
   request: NextRequest,
@@ -9,6 +10,8 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
+
+    console.log(`📥 Resolving help request ${id} with response: "${body.supervisorResponse?.substring(0, 50)}..."`);
 
     if (!body.supervisorResponse) {
       return NextResponse.json(
@@ -22,6 +25,8 @@ export async function POST(
 
     // Resolve the help request
     const helpRequest = await resolveHelpRequest(id, body.supervisorResponse);
+
+    console.log(`✅ Help request ${id} resolved successfully. Status: ${helpRequest.status}`);
 
     // Add to knowledge base
     await createKnowledgeBaseEntry({
@@ -51,7 +56,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: helpRequest,
+      data: serializeHelpRequest(helpRequest),
       message: 'Help request resolved and added to knowledge base',
     });
   } catch (error) {

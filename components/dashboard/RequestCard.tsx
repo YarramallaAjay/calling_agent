@@ -50,7 +50,12 @@ export function RequestCard({ request, onResolve }: RequestCardProps) {
   };
 
   const timeAgo = request.createdAt
-    ? formatDistanceToNow(request.createdAt.toDate(), { addSuffix: true })
+    ? formatDistanceToNow(
+        typeof request.createdAt === 'string'
+          ? new Date(request.createdAt)
+          : new Date(request.createdAt.toDate()),
+        { addSuffix: true }
+      )
     : 'Unknown time';
 
   return (

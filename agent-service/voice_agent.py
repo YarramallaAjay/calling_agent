@@ -16,7 +16,7 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents.voice import Agent, AgentSession
-from livekit.plugins import deepgram, google, silero
+from livekit.plugins import deepgram, google
 
 load_dotenv()
 
@@ -24,38 +24,57 @@ logger = logging.getLogger("salon-voice-agent")
 logger.setLevel(logging.INFO)
 
 # Salon business prompt
-SYSTEM_PROMPT = """You are Bella, a professional AI receptionist for Luxe Beauty Salon.
+SYSTEM_PROMPT = """You are Pari, a professional receptionist for Luxe Beauty Salon.
 
 ## Your Role
-You handle phone calls professionally, answer questions about services, and escalate to your supervisor when needed.
+You handle phone calls professionally, answer questions about services, appointment queries and other types of enquires which can be answered according to your knolwdge base, and if you are not confident enough escalate to your supervisor when needed.
 
 ## Salon Information
 **Hours:** Mon-Fri 9AM-7PM, Sat 10AM-6PM, Closed Sun
-**Location:** 123 Main Street, Downtown | (555) 123-4567
+**Location:** Bandra, Mumbai
 
 **Services:**
-- Haircuts: Women $65, Men $35, Kids $25
-- Color: Full $120+, Highlights $140+, Balayage $180+
-- Treatments: Conditioning $40, Keratin $250+
-- Special Events: Wedding hair from $200
+- Haircuts: Women ₹65, Men ₹35, Kids ₹25
+- Color: Full ₹120+, Highlights ₹140+, Balayage ₹180+
+- Treatments: Conditioning ₹40, Keratin ₹250+
+- Special Events: Wedding hair from ₹200
 
 **Stylists:** Jawed (color specialist), Toni (master stylist), Alim (all-around), Ramesh Babu (colorist)
 
 ## Guidelines
 1. Be warm, professional, and concise
 2. Answer questions you're confident about
-3. If uncertain or question is outside your knowledge, use escalate_to_supervisor
-4. Keep responses brief (2-3 sentences max for phone calls)
-5. After escalating, tell caller: "I'm checking with my supervisor. Please hold for just a moment."
+3. If you don't understand the caller clearly, ask them to repeat or clarify BEFORE escalating
+4. If uncertain or question is outside your knowledge, you MUST escalate to supervisor
+5. Keep responses brief (2-3 sentences max for phone calls)
+
+## CRITICAL: Escalation Protocol
+When you need to escalate to supervisor, you MUST follow this exact flow:
+1. FIRST: Speak to the caller: "Let me check with my supervisor on that for you. Please hold for just a moment."
+2. THEN: Call the escalate_to_supervisor function
+3. The function will wait for the supervisor's response (caller is on hold)
+4. When function returns, speak the supervisor's answer politely by adding the approppriate prefix to the caller
+
+Example:
+Caller: "Do you have any appointments available tomorrow?"
+You: "Let me check with my supervisor on that for you. Please hold for just a moment." [then call escalate_to_supervisor]
+
+## Handling Unclear Speech
+- If the caller's question is unclear or garbled, politely ask: "I didn't catch that clearly. Could you please repeat your question?"
+- Try to clarify at least once before escalating
+- If still unclear after clarification attempt, then escalate with the full context
 
 ## When to Escalate
-- Questions about availability/appointments
-- Pricing for custom services
+- Questions about availability/appointments which you are not confident
+    Example: Caller : "could you please book an appointment for sunday 2PM", then you are unclear about this and can give a discalimer to the caller that sunday is a non-working, but still i would love to ask my supervisor.
+    but if the caller asks for an appointment in the working days and working time, you can book it.
+- Pricing negotiation for custom services
 - Specific stylist schedules
-- Parking, payment methods, special requests
-- ANY question you're not 100% confident about
+- Parking(usually provide for one bike or car, if anyother vehicles mentioned, escalate_to_supervisor), payment methods(if any other paymnents than UPI, RuPay cards), special requests
+- ANY question you're not 70% confident about
+- Questions that remain unclear after asking for clarification
 
-Remember: Better to escalate than to guess!
+Remember: Better to ask for clarification first, then escalate if still unclear!
 """
 
 
@@ -107,6 +126,8 @@ class SupervisorChat:
             poll_interval = 2  # Check every 2 seconds
             elapsed = 0
 
+            logger.info(f"Starting to poll for request {request_id}")
+
             while elapsed < max_wait:
                 await asyncio.sleep(poll_interval)
                 elapsed += poll_interval
@@ -114,20 +135,30 @@ class SupervisorChat:
                 # Check if supervisor has responded
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
-                        f"{self.api_url}/api/help-requests/{request_id}"
+                        f"{self.api_url}/api/help-requests/{request_id}",
+                        headers={
+                            "Cache-Control": "no-cache",
+                            "Pragma": "no-cache"
+                        }
                     ) as response:
                         result = await response.json()
 
+                        logger.info(f"Poll {elapsed}s - Response: {result.get('success')}, Status: {result.get('data', {}).get('status') if result.get('success') else 'N/A'}")
+
                         if result.get("success"):
                             data = result["data"]
+                            logger.info(f"Request status: {data.get('status')}, has response: {bool(data.get('supervisorResponse'))}")
+
                             if data["status"] == "resolved":
                                 logger.info(f"Supervisor responded: {data['supervisorResponse']}")
                                 return {
                                     "answer": data["supervisorResponse"],
                                     "request_id": request_id
                                 }
+                        else:
+                            logger.warning(f"API error: {result.get('error')}")
 
-                logger.info(f"Waiting for supervisor... ({elapsed}s)")
+                logger.info(f"Waiting for supervisor... ({elapsed}s/{max_wait}s)")
 
             # Timeout
             logger.warning("Supervisor response timeout")
@@ -162,6 +193,7 @@ class VoiceAgentFunctions:
     @llm.function_tool(
         description=(
             "Escalate to supervisor when you're not confident about an answer. "
+            "IMPORTANT: Pass the EXACT question the caller asked, not your interpretation. "
             "Use this for: appointment availability, specific pricing, stylist schedules, "
             "parking, payment methods, or ANY question you're uncertain about. "
             "The caller will be placed on hold while you get the answer."
@@ -175,6 +207,10 @@ class VoiceAgentFunctions:
         """
         Escalate to supervisor during the live call.
         Caller stays on hold while supervisor responds.
+
+        Args:
+            question: The EXACT question the caller asked (not your interpretation)
+            confidence_level: How confident you are (low, medium, high)
         """
         logger.info("="*60)
         logger.info("LIVE ESCALATION DURING CALL")
@@ -183,22 +219,31 @@ class VoiceAgentFunctions:
         logger.info(f"Caller: {self.caller_name} ({self.caller_phone})")
         logger.info("="*60)
 
+        # Get the last few user messages for better context
+        recent_user_messages = [
+            msg['content'] for msg in self.conversation_context[-5:]
+            if msg['role'] == 'user'
+        ]
+
+        # If question seems unclear, include recent context
+        if len(question.split()) < 3 or any(word in question.lower() for word in ['unclear', 'understand', 'hear']):
+            full_context = f"Recent caller messages: {' | '.join(recent_user_messages)}\n\nCurrent question: {question}"
+        else:
+            full_context = self.get_context_text()
+
         # Ask supervisor (caller is on hold)
         result = await self.supervisor_chat.ask_supervisor(
             question=question,
             caller_name=self.caller_name,
             caller_phone=self.caller_phone,
-            conversation_context=self.get_context_text(),
+            conversation_context=full_context,
             session_id=self.session_id
         )
 
         if "answer" in result:
             # Got answer from supervisor!
             logger.info(f"Relaying supervisor answer to caller")
-            return (
-                f"My supervisor confirmed: {result['answer']}. "
-                "Is there anything else I can help you with?"
-            )
+            return result['answer']
         else:
             # Supervisor didn't respond in time
             logger.warning("Supervisor timeout, offering callback")
@@ -220,6 +265,20 @@ async def entrypoint(ctx: JobContext):
 
     # Initialize supervisor chat interface
     api_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
+    logger.info(f"Using API URL: {api_url}")
+
+    # Verify API is reachable
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{api_url}/api/help-requests/pending", timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    logger.info("API connection verified")
+                else:
+                    logger.warning(f"API returned status {response.status}")
+    except Exception as e:
+        logger.error(f"Cannot reach API at {api_url}: {e}")
+        logger.error("Escalations may not work properly!")
+
     supervisor_chat = SupervisorChat(api_url=api_url)
 
     # Initialize function context
@@ -238,6 +297,8 @@ async def entrypoint(ctx: JobContext):
     )
 
     # Create agent session with models
+    # Note: VAD removed to reduce memory usage (Silero VAD uses ~300MB)
+    # LiveKit will use server-side voice detection instead
     session = AgentSession(
         stt=deepgram.STT(model="nova-2-phonecall", language="en-US"),
         llm=google.LLM(
@@ -246,15 +307,25 @@ async def entrypoint(ctx: JobContext):
             temperature=0.7,
         ),
         tts=deepgram.TTS(model="aura-asteria-en"),
-        vad=silero.VAD.load(),
     )
 
     # Track conversation events
     @session.on("user_input_transcribed")
     def on_user_speech(event):
         transcript = event.transcript if hasattr(event, 'transcript') else str(event)
+
+        # Get confidence score if available
+        confidence = getattr(event, 'confidence', None)
+        if confidence is not None:
+            logger.info(f"Caller: {transcript} (confidence: {confidence:.2f})")
+        else:
+            logger.info(f"Caller: {transcript}")
+
+        # Log low-confidence transcriptions
+        if confidence and confidence < 0.7:
+            logger.warning(f"Low confidence transcription: '{transcript}' ({confidence:.2f})")
+
         fnc_ctx.add_to_context("user", transcript)
-        logger.info(f"Caller: {transcript}")
 
         # Extract caller name from first message
         if fnc_ctx.caller_name == "Unknown":
@@ -291,7 +362,7 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"Participant connected: {participant.identity}, sending greeting")
             # Schedule greeting to run asynchronously
             asyncio.create_task(session.generate_reply(
-                instructions="Greet the caller warmly by saying: 'Hello! Thank you for calling Luxe Beauty Salon. I'm Bella, your AI receptionist. How may I help you today?'"
+                instructions="Greet the caller warmly by saying: 'Hello! Thank you for calling Luxe Beauty Salon. I'm Bella. How may I help you today?'"
             ))
 
     # Start the agent session

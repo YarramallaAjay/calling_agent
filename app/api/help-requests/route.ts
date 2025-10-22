@@ -4,13 +4,15 @@ import {
   getAllHelpRequests,
 } from '@/lib/firebase/helpRequests';
 import { CreateHelpRequestInput } from '@/lib/types';
+import { serializeHelpRequest } from '@/lib/firebase/serialize';
 
 export async function GET() {
   try {
     const requests = await getAllHelpRequests();
+    const serializedRequests = requests.map(serializeHelpRequest);
     return NextResponse.json({
       success: true,
-      data: requests,
+      data: serializedRequests,
     });
   } catch (error) {
     console.error('Error fetching help requests:', error);
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        data: helpRequest,
+        data: serializeHelpRequest(helpRequest),
       },
       { status: 201 }
     );

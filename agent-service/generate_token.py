@@ -20,7 +20,7 @@ async def create_room_with_agent():
         api_secret=os.getenv("LIVEKIT_API_SECRET"),
     )
 
-    room_name = "test-room"
+    room_name = "first_room"
 
     try:
         # Create room with agent dispatch
@@ -46,9 +46,9 @@ async def create_room_with_agent():
     )
 
     # Set token details
-    identity = "test-user"
+    identity = "Ajay"
     token.with_identity(identity)  # Your identity in the room
-    token.with_name("Test User")      # Display name
+    token.with_name("Ajay")      # Display name
     token.with_grants(api.VideoGrants(
         room_join=True,
         room=room_name,
