@@ -3,3 +3,5 @@ livekit-plugins-deepgram
 livekit-plugins-google
 python-dotenv
 aiohttp
+pinecone
+google-generativeai

@@ -1,6 +1,7 @@
 """
 Real-time Voice Agent with Live Supervisor Intervention
 Handles actual phone calls with confidence-based escalation
+Integrated with Pinecone knowledge base for semantic search
 """
 
 import asyncio
@@ -18,64 +19,75 @@ from livekit.agents import (
 from livekit.agents.voice import Agent, AgentSession
 from livekit.plugins import deepgram, google
 
+from knowledge_base import get_knowledge_base_service
+
 load_dotenv()
 
 logger = logging.getLogger("salon-voice-agent")
 logger.setLevel(logging.INFO)
 
-# Salon business prompt
-SYSTEM_PROMPT = """You are Pari, a professional receptionist for Luxe Beauty Salon.
+# Base system prompt (will be augmented with KB results dynamically)
+BASE_SYSTEM_PROMPT = """You are Pari, a professional receptionist for Luxe Beauty Salon in Bandra, Mumbai.
 
 ## Your Role
-You handle phone calls professionally, answer questions about services, appointment queries and other types of enquires which can be answered according to your knolwdge base, and if you are not confident enough escalate to your supervisor when needed.
-
-## Salon Information
-**Hours:** Mon-Fri 9AM-7PM, Sat 10AM-6PM, Closed Sun
-**Location:** Bandra, Mumbai
-
-**Services:**
-- Haircuts: Women ₹65, Men ₹35, Kids ₹25
-- Color: Full ₹120+, Highlights ₹140+, Balayage ₹180+
-- Treatments: Conditioning ₹40, Keratin ₹250+
-- Special Events: Wedding hair from ₹200
-
-**Stylists:** Jawed (color specialist), Toni (master stylist), Alim (all-around), Ramesh Babu (colorist)
+You handle phone calls professionally and answer questions about our salon. You have access to a knowledge base that contains all business information, policies, and learned answers from previous interactions.
 
 ## Guidelines
 1. Be warm, professional, and concise
-2. Answer questions you're confident about
-3. If you don't understand the caller clearly, ask them to repeat or clarify BEFORE escalating
-4. If uncertain or question is outside your knowledge, you MUST escalate to supervisor
-5. Keep responses brief (2-3 sentences max for phone calls)
+2. Use the knowledge base context provided to answer questions accurately
+3. If knowledge base provides high-confidence answer, use it directly
+4. If knowledge base provides medium-confidence answer, use it as guidance but verify
+5. If no relevant knowledge or low confidence, escalate to supervisor
+6. Keep responses brief (2-3 sentences max for phone calls)
 
 ## CRITICAL: Escalation Protocol
 When you need to escalate to supervisor, you MUST follow this exact flow:
 1. FIRST: Speak to the caller: "Let me check with my supervisor on that for you. Please hold for just a moment."
 2. THEN: Call the escalate_to_supervisor function
 3. The function will wait for the supervisor's response (caller is on hold)
-4. When function returns, speak the supervisor's answer politely by adding the approppriate prefix to the caller
-
-Example:
-Caller: "Do you have any appointments available tomorrow?"
-You: "Let me check with my supervisor on that for you. Please hold for just a moment." [then call escalate_to_supervisor]
-
-## Handling Unclear Speech
-- If the caller's question is unclear or garbled, politely ask: "I didn't catch that clearly. Could you please repeat your question?"
-- Try to clarify at least once before escalating
-- If still unclear after clarification attempt, then escalate with the full context
+4. When function returns, speak the supervisor's answer politely
 
 ## When to Escalate
-- Questions about availability/appointments which you are not confident
-    Example: Caller : "could you please book an appointment for sunday 2PM", then you are unclear about this and can give a discalimer to the caller that sunday is a non-working, but still i would love to ask my supervisor.
-    but if the caller asks for an appointment in the working days and working time, you can book it.
-- Pricing negotiation for custom services
-- Specific stylist schedules
-- Parking(usually provide for one bike or car, if anyother vehicles mentioned, escalate_to_supervisor), payment methods(if any other paymnents than UPI, RuPay cards), special requests
-- ANY question you're not 70% confident about
+- No relevant knowledge base results found
+- Knowledge base confidence is low (<70%)
+- Real-time information needed (today's availability, current appointments)
+- Specific booking/scheduling requests
 - Questions that remain unclear after asking for clarification
 
-Remember: Better to ask for clarification first, then escalate if still unclear!
+Remember: The knowledge base is your primary source of information. Trust high-confidence results!
 """
+
+
+def build_system_prompt_with_kb(kb_results=None):
+    """Build dynamic system prompt with knowledge base context"""
+    prompt = BASE_SYSTEM_PROMPT
+
+    if kb_results and len(kb_results) > 0:
+        top_result = kb_results[0]
+        confidence = top_result['confidence']
+
+        # Add KB context based on confidence
+        if confidence == 'high':
+            prompt += f"\n\n## HIGH CONFIDENCE - Use This Answer:\n"
+            prompt += f"Q: {top_result['question']}\n"
+            prompt += f"A: {top_result['answer']}\n"
+            prompt += f"(Match score: {top_result['score']:.2f})\n"
+            prompt += "\nThis is a highly relevant match. Use this answer to respond to the caller."
+
+        elif confidence == 'medium':
+            prompt += f"\n\n## MEDIUM CONFIDENCE - Consider This Context:\n"
+            prompt += f"Q: {top_result['question']}\n"
+            prompt += f"A: {top_result['answer']}\n"
+            prompt += f"(Match score: {top_result['score']:.2f})\n"
+            prompt += "\nThis may be relevant. Use as guidance, but consider escalating if you're unsure."
+
+        # Show additional results if available
+        if len(kb_results) > 1:
+            prompt += f"\n\n## Additional Related Information:\n"
+            for i, result in enumerate(kb_results[1:3], 2):
+                prompt += f"{i}. {result['question']}: {result['answer'][:100]}...\n"
+
+    return prompt
 
 
 class SupervisorChat:
@@ -260,12 +272,20 @@ async def entrypoint(ctx: JobContext):
     """
     Main entry point for voice agent.
     Handles incoming phone calls with real-time supervisor intervention.
+    Integrated with Pinecone knowledge base for semantic search.
     """
     logger.info(f"Incoming call to room: {ctx.room.name}")
 
     # Initialize supervisor chat interface
     api_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
     logger.info(f"Using API URL: {api_url}")
+
+    # Initialize knowledge base service
+    kb_service = get_knowledge_base_service()
+    if kb_service.enabled:
+        logger.info("✅ Knowledge base enabled")
+    else:
+        logger.warning("⚠️ Knowledge base disabled - will rely on basic prompt only")
 
     # Verify API is reachable
     try:
@@ -290,9 +310,10 @@ async def entrypoint(ctx: JobContext):
     # Initialize voice pipeline with Gemini
     logger.info("Initializing voice pipeline...")
 
-    # Create agent with instructions and tools
+    # Create agent with base instructions and tools
+    # Instructions will be dynamically updated based on KB search results
     agent = Agent(
-        instructions=SYSTEM_PROMPT,
+        instructions=BASE_SYSTEM_PROMPT,
         tools=llm.find_function_tools(fnc_ctx),
     )
 
@@ -309,7 +330,7 @@ async def entrypoint(ctx: JobContext):
         tts=deepgram.TTS(model="aura-asteria-en"),
     )
 
-    # Track conversation events
+    # Track conversation events with KB search integration
     @session.on("user_input_transcribed")
     def on_user_speech(event):
         transcript = event.transcript if hasattr(event, 'transcript') else str(event)
@@ -339,6 +360,28 @@ async def entrypoint(ctx: JobContext):
                             fnc_ctx.caller_name = potential_name
                             logger.info(f"Caller name: {potential_name}")
                             break
+
+        # Search knowledge base for relevant information
+        if kb_service.enabled and len(transcript.split()) > 2:  # Only search substantial queries
+            try:
+                logger.info(f"🔍 Searching knowledge base for: {transcript}")
+                kb_results = kb_service.search(transcript, top_k=3)
+
+                if kb_results:
+                    # Update agent instructions with KB context
+                    dynamic_prompt = build_system_prompt_with_kb(kb_results)
+                    agent.instructions = dynamic_prompt
+
+                    top_match = kb_results[0]
+                    logger.info(f"✅ KB Match: {top_match['question'][:50]}... (confidence: {top_match['confidence']}, score: {top_match['score']:.3f})")
+                else:
+                    # Reset to base prompt if no results
+                    agent.instructions = BASE_SYSTEM_PROMPT
+                    logger.info("⚠️ No KB matches found")
+
+            except Exception as e:
+                logger.error(f"Error searching KB: {e}")
+                agent.instructions = BASE_SYSTEM_PROMPT
 
     @session.on("speech_created")
     def on_agent_speech(speech):

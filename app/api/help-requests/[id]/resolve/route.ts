@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveHelpRequest } from '@/lib/firebase/helpRequests';
 import { createKnowledgeBaseEntry } from '@/lib/firebase/knowledgeBase';
+import { upsertKnowledgeBase } from '@/lib/pinecone/operations';
 import { serializeHelpRequest } from '@/lib/firebase/serialize';
 
 export async function POST(
@@ -28,13 +29,31 @@ export async function POST(
 
     console.log(`✅ Help request ${id} resolved successfully. Status: ${helpRequest.status}`);
 
-    // Add to knowledge base
-    await createKnowledgeBaseEntry({
+    // Add to knowledge base (Firebase)
+    const knowledgeEntry = await createKnowledgeBaseEntry({
       question: helpRequest.question,
       answer: body.supervisorResponse,
+      type: 'learned_answer',
       learnedFromRequestId: id,
       tags: body.tags || [],
+      isActive: true,
     });
+
+    // Also add to Pinecone for semantic search
+    try {
+      await upsertKnowledgeBase({
+        id: knowledgeEntry.id,
+        question: knowledgeEntry.question,
+        answer: knowledgeEntry.answer,
+        type: 'learned_answer',
+        tags: knowledgeEntry.tags,
+        isActive: true,
+      });
+      console.log(`✅ Knowledge entry ${knowledgeEntry.id} synced to Pinecone`);
+    } catch (pineconeError) {
+      console.error('Error syncing to Pinecone:', pineconeError);
+      // Continue even if Pinecone sync fails
+    }
 
     // Trigger caller follow-up webhook
     try {

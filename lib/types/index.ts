@@ -31,22 +31,46 @@ export interface ResolveHelpRequestInput {
 }
 
 // Knowledge Base Types
+export type KnowledgeBaseEntryType = 'business_context' | 'learned_answer';
+
 export interface KnowledgeBaseEntry {
   id: string;
   question: string;
   answer: string;
+  type: KnowledgeBaseEntryType;
   createdAt: Timestamp | string; // Timestamp in DB, string when serialized for API
+  updatedAt?: Timestamp | string;
   learnedFromRequestId?: string;
   tags: string[];
   variations?: string[]; // Question variations for better matching
+  pineconeId?: string; // Reference to Pinecone vector ID
+  isActive: boolean; // Enable/disable entry
+  usageCount?: number; // Track how often this is used
+  lastUsedAt?: Timestamp | string;
 }
 
 export interface CreateKnowledgeBaseEntryInput {
   question: string;
   answer: string;
+  type: KnowledgeBaseEntryType;
   learnedFromRequestId?: string;
   tags?: string[];
   variations?: string[];
+  isActive?: boolean;
+}
+
+export interface UpdateKnowledgeBaseEntryInput {
+  question?: string;
+  answer?: string;
+  tags?: string[];
+  variations?: string[];
+  isActive?: boolean;
+}
+
+export interface SearchKnowledgeBaseResult {
+  entry: KnowledgeBaseEntry;
+  score: number; // Similarity score from Pinecone (0-1)
+  metadata?: Record<string, any>;
 }
 
 // Call Session Types

@@ -15,10 +15,14 @@ export async function createKnowledgeBaseEntry(
   const entry: Omit<KnowledgeBaseEntry, 'id'> = {
     question: input.question,
     answer: input.answer,
+    type: input.type,
     createdAt: FieldValue.serverTimestamp() as any,
-    learnedFromRequestId: input.learnedFromRequestId,
+    updatedAt: FieldValue.serverTimestamp() as any,
+    learnedFromRequestId: input.learnedFromRequestId|| "",
     tags: input.tags || [],
     variations: input.variations || [],
+    isActive: input.isActive !== undefined ? input.isActive : true,
+    usageCount: 0,
   };
 
   await docRef.set(entry);
@@ -119,13 +123,27 @@ export async function updateKnowledgeBaseEntry(
 ): Promise<KnowledgeBaseEntry> {
   const docRef = adminDb.collection(COLLECTION_NAME).doc(id);
 
-  await docRef.update(updates);
+  const updateData = {
+    ...updates,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  await docRef.update(updateData);
 
   const doc = await docRef.get();
   return {
     id: doc.id,
     ...doc.data(),
   } as KnowledgeBaseEntry;
+}
+
+export async function incrementUsageCount(id: string): Promise<void> {
+  const docRef = adminDb.collection(COLLECTION_NAME).doc(id);
+
+  await docRef.update({
+    usageCount: FieldValue.increment(1),
+    lastUsedAt: FieldValue.serverTimestamp(),
+  });
 }
 
 export async function deleteKnowledgeBaseEntry(id: string): Promise<void> {
