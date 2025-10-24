@@ -27,7 +27,7 @@ export async function POST(
     // Resolve the help request
     const helpRequest = await resolveHelpRequest(id, body.supervisorResponse);
 
-    console.log(`✅ Help request ${id} resolved successfully. Status: ${helpRequest.status}`);
+    console.log(`[SUCCESS] Help request ${id} resolved successfully. Status: ${helpRequest.status}`);
 
     // Add to knowledge base (Firebase)
     const knowledgeEntry = await createKnowledgeBaseEntry({
@@ -49,7 +49,7 @@ export async function POST(
         tags: knowledgeEntry.tags,
         isActive: true,
       });
-      console.log(`✅ Knowledge entry ${knowledgeEntry.id} synced to Pinecone`);
+      console.log(`[SUCCESS] Knowledge entry ${knowledgeEntry.id} synced to Pinecone`);
     } catch (pineconeError) {
       console.error('Error syncing to Pinecone:', pineconeError);
       // Continue even if Pinecone sync fails

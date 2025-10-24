@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     console.log(`Response: ${payload.supervisorResponse}`);
     console.log(`Time: ${payload.timestamp}`);
     console.log('═'.repeat(50));
-    console.log(`💬 SMS to ${payload.callerPhone}:`);
+    console.log(`[SMS] Sending to ${payload.callerPhone}:`);
     console.log(`   "Hi! I checked with my supervisor."`);
     console.log(`   "${payload.supervisorResponse}"`);
     console.log(`   "Thanks for your patience!"\n`);

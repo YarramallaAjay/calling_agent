@@ -20,11 +20,11 @@ async def create_room_with_agent():
         api_secret=os.getenv("LIVEKIT_API_SECRET"),
     )
 
-    room_name = "first_room"
+    room_name = "Second_room"
 
     try:
-        # Create room with agent dispatch
-        print("Creating room with agent dispatch...")
+        # Create room
+        print("Creating room...")
         room = await livekit_api.room.create_room(
             api.CreateRoomRequest(
                 name=room_name,
@@ -32,12 +32,27 @@ async def create_room_with_agent():
                 max_participants=10,
             )
         )
-        print(f"Room created: {room.name}")
+        print(f"[SUCCESS] Room created: {room.name}")
     except Exception as e:
         if "already exists" in str(e):
-            print(f"Room already exists: {room_name}")
+            print(f"[INFO] Room already exists: {room_name}")
         else:
-            print(f"Error creating room: {e}")
+            print(f"[ERROR] Error creating room: {e}")
+
+    # Dispatch agent to the room
+    try:
+        print("Dispatching agent to room...")
+        dispatch_result = await livekit_api.agent_dispatch.create_dispatch(
+            api.CreateAgentDispatchRequest(
+                room=room_name,
+                agent_name="",  # Empty = any available agent
+            )
+        )
+        print(f"[SUCCESS] Agent dispatched successfully!")
+        print(f"   Dispatch ID: {dispatch_result.agent_dispatch.id}")
+    except Exception as e:
+        print(f"[WARNING] Agent dispatch error: {e}")
+        print(f"   This is OK if agent already dispatched or auto-joining")
 
     # Create a token for a test participant
     token = api.AccessToken(
@@ -46,9 +61,9 @@ async def create_room_with_agent():
     )
 
     # Set token details
-    identity = "Ajay"
+    identity = "Srinivas"
     token.with_identity(identity)  # Your identity in the room
-    token.with_name("Ajay")      # Display name
+    token.with_name("Srinivas")      # Display name
     token.with_grants(api.VideoGrants(
         room_join=True,
         room=room_name,

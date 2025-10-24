@@ -15,7 +15,7 @@ export async function GET(
     const helpRequest = await getHelpRequest(id);
 
     if (!helpRequest) {
-      console.log(`❌ Help request ${id} not found`);
+      console.log(`[ERROR] Help request ${id} not found`);
       return NextResponse.json(
         {
           success: false,

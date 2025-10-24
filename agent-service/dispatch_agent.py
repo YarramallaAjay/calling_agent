@@ -19,7 +19,7 @@ async def dispatch_agent_to_room():
         api_secret=os.getenv("LIVEKIT_API_SECRET"),
     )
 
-    room_name = "first_room"
+    room_name = "Second_room"
 
     try:
         # Create or update room with agent dispatch
@@ -47,3 +47,4 @@ async def dispatch_agent_to_room():
 
 if __name__ == "__main__":
     asyncio.run(dispatch_agent_to_room())
+    

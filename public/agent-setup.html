@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Setup Guide</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        h2 {
+            color: #1976d2;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #666;
+        }
+        ol, ul {
+            line-height: 1.8;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+        a {
+            color: #2196f3;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Voice Agent Setup Guide</h1>
+
+        <div class="success-box">
+            <h3>✅ Your Services Are Running!</h3>
+            <p><strong>Frontend:</strong> http://localhost:3000</p>
+            <p><strong>Agent Worker:</strong> Connected to LiveKit</p>
+        </div>
+
+        <h2>📋 Enable Auto-Dispatch (Recommended for MVP)</h2>
+
+        <div class="info-box">
+            <p><strong>This is the simplest way to get your agent working!</strong></p>
+            <p>Auto-dispatch automatically sends your agent to any new room that's created.</p>
+        </div>
+
+        <div class="step">
+            <h3>Step 1: Go to LiveKit Cloud</h3>
+            <p>Visit: <a href="https://cloud.livekit.io" target="_blank">https://cloud.livekit.io</a></p>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Select Your Project</h3>
+            <p>Click on your project: <strong>calling-agent-ih8g5t00</strong></p>
+        </div>
+
+        <div class="step">
+            <h3>Step 3: Navigate to Agents Settings</h3>
+            <p>Go to: <strong>Settings → Agents</strong></p>
+        </div>
+
+        <div class="step">
+            <h3>Step 4: Enable Auto-Dispatch</h3>
+            <p>Toggle on: <strong>"Auto-dispatch agents to new rooms"</strong></p>
+        </div>
+
+        <div class="success-box">
+            <h3>🎉 That's it!</h3>
+            <p>Once enabled, your agent will automatically join any room you create.</p>
+        </div>
+
+        <h2>🧪 Test Your Agent</h2>
+
+        <h3>Option 1: Using the Test Page</h3>
+        <ol>
+            <li>Generate a token:
+                <pre><code>cd agent-service && python generate_token.py</code></pre>
+                Or in Docker:
+                <pre><code>docker-compose exec agent python generate_token.py</code></pre>
+            </li>
+            <li>Open: <a href="/test-agent.html">http://localhost:3000/test-agent.html</a></li>
+            <li>Paste your token</li>
+            <li>Click "Connect to Agent"</li>
+            <li>The agent will greet you automatically!</li>
+        </ol>
+
+        <h3>Option 2: Using LiveKit Playground</h3>
+        <ol>
+            <li>Go to: <a href="https://cloud.livekit.io" target="_blank">LiveKit Cloud</a></li>
+            <li>Navigate to: <strong>Playground → Agents</strong></li>
+            <li>Create a test room</li>
+            <li>Your agent will join automatically!</li>
+        </ol>
+
+        <div class="warning-box">
+            <h3>⚠️ Troubleshooting</h3>
+            <ul>
+                <li><strong>Agent not joining?</strong> Make sure auto-dispatch is enabled in LiveKit Cloud</li>
+                <li><strong>No audio?</strong> Check your browser microphone permissions</li>
+                <li><strong>Agent worker offline?</strong> Run: <code>docker-compose ps</code> to check status</li>
+            </ul>
+        </div>
+
+        <h2>🔍 Monitor Your Agent</h2>
+        <p>Watch the agent logs in real-time:</p>
+        <pre><code>docker-compose logs -f agent</code></pre>
+        <p>Look for: <code>"Incoming call to room: Second_room"</code></p>
+
+        <div style="margin-top: 30px; text-align: center;">
+            <button onclick="window.location.href='/test-agent.html'">Go to Test Page</button>
+            <button onclick="window.open('https://cloud.livekit.io', '_blank')">Open LiveKit Cloud</button>
+        </div>
+    </div>
+</body>
+</html>

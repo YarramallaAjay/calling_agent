@@ -41,11 +41,18 @@ You handle phone calls professionally and answer questions about our salon. You 
 6. Keep responses brief (2-3 sentences max for phone calls)
 
 ## CRITICAL: Escalation Protocol
-When you need to escalate to supervisor, you MUST follow this exact flow:
-1. FIRST: Speak to the caller: "Let me check with my supervisor on that for you. Please hold for just a moment."
-2. THEN: Call the escalate_to_supervisor function
-3. The function will wait for the supervisor's response (caller is on hold)
-4. When function returns, speak the supervisor's answer politely
+When you need to escalate to supervisor, you MUST follow this EXACT flow in TWO STEPS:
+
+STEP 1 - SPEAK FIRST (REQUIRED):
+Say exactly: "Let me check with my supervisor on that for you. Please hold for just a moment."
+
+STEP 2 - CALL FUNCTION:
+Only AFTER speaking, call escalate_to_supervisor(question="exact caller question", confidence_level="low")
+
+STEP 3 - SPEAK ANSWER:
+When function returns, say: "Thank you for holding. [supervisor's answer]"
+
+NEVER call escalate_to_supervisor without speaking the hold message first!
 
 ## When to Escalate
 - No relevant knowledge base results found
@@ -283,9 +290,9 @@ async def entrypoint(ctx: JobContext):
     # Initialize knowledge base service
     kb_service = get_knowledge_base_service()
     if kb_service.enabled:
-        logger.info("✅ Knowledge base enabled")
+        logger.info("[SUCCESS] Knowledge base enabled")
     else:
-        logger.warning("⚠️ Knowledge base disabled - will rely on basic prompt only")
+        logger.warning("[WARNING] Knowledge base disabled - will rely on basic prompt only")
 
     # Verify API is reachable
     try:
@@ -364,24 +371,61 @@ async def entrypoint(ctx: JobContext):
         # Search knowledge base for relevant information
         if kb_service.enabled and len(transcript.split()) > 2:  # Only search substantial queries
             try:
-                logger.info(f"🔍 Searching knowledge base for: {transcript}")
-                kb_results = kb_service.search(transcript, top_k=3)
+                logger.info(f"[KB SEARCH] Searching knowledge base for: {transcript}")
+                # Use context-aware search with conversation history
+                kb_results = kb_service.search_with_context(
+                    query=transcript,
+                    conversation_history=fnc_ctx.conversation_context,
+                    top_k=5
+                )
 
                 if kb_results:
-                    # Update agent instructions with KB context
-                    dynamic_prompt = build_system_prompt_with_kb(kb_results)
-                    agent.instructions = dynamic_prompt
-
                     top_match = kb_results[0]
-                    logger.info(f"✅ KB Match: {top_match['question'][:50]}... (confidence: {top_match['confidence']}, score: {top_match['score']:.3f})")
+                    logger.info(f"[KB MATCH] {top_match['question'][:50]}... (confidence: {top_match['confidence']}, score: {top_match['score']:.3f})")
+
+                    # Build directive KB context based on confidence
+                    if top_match['confidence'] == 'high':
+                        kb_context = f"""
+KNOWLEDGE BASE - HIGH CONFIDENCE MATCH (score: {top_match['score']:.2f})
+[HIGH CONFIDENCE] USE THIS ANSWER DIRECTLY - This is highly accurate information:
+
+Question: {top_match['question']}
+Answer: {top_match['answer']}
+
+Action: Answer the caller using this information. Do NOT escalate."""
+                    elif top_match['confidence'] == 'medium':
+                        kb_context = f"""
+KNOWLEDGE BASE - MEDIUM CONFIDENCE MATCH (score: {top_match['score']:.2f})
+[MEDIUM CONFIDENCE] USE AS GUIDANCE - This is likely relevant:
+
+Question: {top_match['question']}
+Answer: {top_match['answer']}
+
+Action: Use this as a basis for your response. If the caller's question seems different, you may ask for clarification or escalate."""
+                    else:
+                        kb_context = f"""
+KNOWLEDGE BASE - LOW CONFIDENCE MATCH (score: {top_match['score']:.2f})
+[LOW CONFIDENCE] ESCALATE RECOMMENDED - This match may not be relevant:
+
+Question: {top_match['question']}
+Answer: {top_match['answer']}
+
+Action: This is not a strong match. You should escalate to supervisor."""
+
+                    # Add additional matches if available
+                    if len(kb_results) > 1:
+                        kb_context += "\n\nRelated information also found:"
+                        for i, result in enumerate(kb_results[1:3], 2):
+                            kb_context += f"\n{i}. {result['question']}: {result['answer'][:80]}..."
+
+                    fnc_ctx.add_to_context("system", kb_context)
                 else:
-                    # Reset to base prompt if no results
-                    agent.instructions = BASE_SYSTEM_PROMPT
-                    logger.info("⚠️ No KB matches found")
+                    logger.info("[WARNING] No KB matches found")
+                    # Explicitly tell the LLM to escalate when no KB results
+                    fnc_ctx.add_to_context("system", "\n[WARNING] NO KNOWLEDGE BASE MATCHES - You should escalate this question to supervisor.")
 
             except Exception as e:
                 logger.error(f"Error searching KB: {e}")
-                agent.instructions = BASE_SYSTEM_PROMPT
 
     @session.on("speech_created")
     def on_agent_speech(speech):

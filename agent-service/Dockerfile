@@ -1,7 +1,6 @@
-# Use Python 3.11 slim image
+# Simple Python Agent Dockerfile for MVP
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /code
 
 # Install system dependencies needed for building Python packages
@@ -16,14 +15,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all application files
-COPY voice_agent.py .
-COPY dispatch_agent.py .
-COPY generate_token.py .
+COPY *.py .
 
-# The agent doesn't expose HTTP ports, it connects to LiveKit via WebRTC
-# But we expose 8080 for health checks if needed
+# The agent connects to LiveKit via WebRTC
 EXPOSE 8080
 
-# Start the voice agent in production mode
-# This uses the livekit.agents CLI that's installed via requirements.txt
+# Start the voice agent
 CMD ["python", "voice_agent.py", "start"]

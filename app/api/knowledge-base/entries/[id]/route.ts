@@ -10,10 +10,11 @@ import { UpdateKnowledgeBaseEntryInput } from '@/lib/types';
 // GET /api/knowledge-base/entries/[id] - Get single entry
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const entry = await getKnowledgeBaseEntry(params.id);
+    const { id } = await params;
+    const entry = await getKnowledgeBaseEntry(id);
 
     if (!entry) {
       return NextResponse.json(
@@ -44,13 +45,14 @@ export async function GET(
 // PUT /api/knowledge-base/entries/[id] - Update entry
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body: UpdateKnowledgeBaseEntryInput = await request.json();
 
     // Update in Firebase
-    const updatedEntry = await updateKnowledgeBaseEntry(params.id, body);
+    const updatedEntry = await updateKnowledgeBaseEntry(id, body);
 
     // Update in Pinecone if question or answer changed
     if (body.question || body.answer) {
@@ -88,15 +90,16 @@ export async function PUT(
 // DELETE /api/knowledge-base/entries/[id] - Delete entry
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Delete from Firebase
-    await deleteKnowledgeBaseEntry(params.id);
+    await deleteKnowledgeBaseEntry(id);
 
     // Delete from Pinecone
     try {
-      await deleteKnowledgeBase(params.id);
+      await deleteKnowledgeBase(id);
     } catch (pineconeError) {
       console.error('Error deleting from Pinecone:', pineconeError);
     }

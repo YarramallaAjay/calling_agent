@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const event = await receiver.receive(body, authorization);
 
     // Log the event
-    console.log('\n🎙️ LIVEKIT WEBHOOK EVENT 🎙️');
+    console.log('\n[LIVEKIT WEBHOOK EVENT]');
     console.log('═'.repeat(50));
     console.log(`Event Type: ${event.event}`);
     console.log(`Room: ${event.room?.name || 'N/A'}`);
@@ -32,19 +32,19 @@ export async function POST(request: NextRequest) {
     // Handle different event types
     switch (event.event) {
       case 'room_started':
-        console.log(`✅ Room ${event.room?.name} has started`);
+        console.log(`[SUCCESS] Room ${event.room?.name} has started`);
         break;
       case 'room_finished':
-        console.log(`🏁 Room ${event.room?.name} has finished`);
+        console.log(`[INFO] Room ${event.room?.name} has finished`);
         break;
       case 'participant_joined':
-        console.log(`👋 Participant ${event.participant?.identity} joined`);
+        console.log(`[INFO] Participant ${event.participant?.identity} joined`);
         break;
       case 'participant_left':
-        console.log(`👋 Participant ${event.participant?.identity} left`);
+        console.log(`[INFO] Participant ${event.participant?.identity} left`);
         break;
       default:
-        console.log(`📝 Event: ${event.event}`);
+        console.log(`[INFO] Event: ${event.event}`);
     }
 
     return NextResponse.json({

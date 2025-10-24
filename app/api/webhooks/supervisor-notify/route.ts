@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
     console.log(`Time: ${payload.timestamp}`);
     console.log('═'.repeat(50));
-    console.log('💬 Message: "Hey, I need help answering this question."');
+    console.log('[MESSAGE] "Hey, I need help answering this question."');
     console.log('🔗 View at: http://localhost:3000/dashboard\n');
 
     // In a real implementation, this would send an actual SMS via Twilio
