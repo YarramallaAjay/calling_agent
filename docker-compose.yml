@@ -14,6 +14,7 @@ services:
         - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
         - NEXT_PUBLIC_APP_URL=http://localhost:3000
     container_name: calling-agent-frontend
+    image: ajayyarramalla/calling-agent-frontend:latest   
     ports:
       - "3000:3000"
     environment:
@@ -39,6 +40,7 @@ services:
       context: ./agent-service
       dockerfile: Dockerfile
     container_name: calling-agent-worker
+    image: ajayyarramalla/calling-agent-worker:latest 
     environment:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
